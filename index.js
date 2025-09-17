@@ -1,5 +1,7 @@
 
 const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require('discord.js');
+const fs = require('fs');
+const path = require('path');
 
 const client = new Client({
     intents: [
@@ -9,7 +11,24 @@ const client = new Client({
     ]
 });
 
-const sentences = [];
+// 서버별 문장 저장 객체
+const DATA_FILE = path.join(__dirname, 'sentences.json');
+let sentences = {};
+
+// 파일에서 데이터 불러오기
+function loadSentences() {
+    if (fs.existsSync(DATA_FILE)) {
+        try {
+            sentences = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+        } catch (e) {
+            sentences = {};
+        }
+    }
+}
+function saveSentences() {
+    fs.writeFileSync(DATA_FILE, JSON.stringify(sentences, null, 2), 'utf8');
+}
+loadSentences();
 
 const commands = [
     new SlashCommandBuilder()
@@ -41,7 +60,7 @@ const commands = [
 client.once('ready', async () => {
     console.log(`Logged in as ${client.user.tag}!`);
     // 모든 서버에 슬래시 명령어 등록
-    const rest = new REST({ version: '10' }).setToken(process.env.BOT_TOKEN || "MTQxNzc3MzYyODE1MzY1OTUyNQ.GfHu9d.pIyMChMc13d-9PrvTzsOLNe2EpLAErDfwXFW_k");
+    const rest = new REST({ version: '10' }).setToken(process.env.BOT_TOKEN);
     for (const guild of client.guilds.cache.values()) {
         try {
             await rest.put(
@@ -56,7 +75,7 @@ client.once('ready', async () => {
 });
 
 client.on('guildCreate', async guild => {
-    const rest = new REST({ version: '10' }).setToken(process.env.BOT_TOKEN || "MTQxNzc3MzYyODE1MzY1OTUyNQ.GfHu9d.pIyMChMc13d-9PrvTzsOLNe2EpLAErDfwXFW_k");
+    const rest = new REST({ version: '10' }).setToken(process.env.BOT_TOKEN);
     try {
         await rest.put(
             Routes.applicationGuildCommands(client.user.id, guild.id),
@@ -69,8 +88,10 @@ client.on('guildCreate', async guild => {
 });
 
 client.on('interactionCreate', async interaction => {
-    // 슬래시 명령어 처리
     if (!interaction.isCommand()) return;
+
+    const guildId = interaction.guildId;
+    if (!sentences[guildId]) sentences[guildId] = [];
 
     if (interaction.commandName === '설명') {
         const helpText =
@@ -85,7 +106,8 @@ client.on('interactionCreate', async interaction => {
     if (interaction.commandName === '등록') {
         const input = interaction.options.getString('문장');
         const newSentences = input.split('/').map(s => s.trim()).filter(s => s.length > 0);
-        sentences.push(...newSentences);
+        sentences[guildId].push(...newSentences);
+        saveSentences();
         if (newSentences.length === 1) {
             await interaction.reply(`문장이 등록되었습니다: "${newSentences[0]}".`);
         } else {
@@ -94,34 +116,33 @@ client.on('interactionCreate', async interaction => {
     }
 
     if (interaction.commandName === '랜덤') {
-        if (sentences.length === 0) {
+        if (!sentences[guildId] || sentences[guildId].length === 0) {
             await interaction.reply('등록된 문장이 없습니다. "/등록 [문장]" 명령어로 문장을 등록해주세요.');
         } else {
-            const randomSentence = sentences[Math.floor(Math.random() * sentences.length)];
+            const randomSentence = sentences[guildId][Math.floor(Math.random() * sentences[guildId].length)];
             await interaction.reply(randomSentence + '.');
         }
     }
 
     if (interaction.commandName === '목록') {
-        if (sentences.length === 0) {
+        if (!sentences[guildId] || sentences[guildId].length === 0) {
             await interaction.reply('등록된 문장이 없습니다.');
         } else {
-            const list = sentences.map((s, i) => `${i + 1}. ${s}.`).join('\n');
+            const list = sentences[guildId].map((s, i) => `${i + 1}. ${s}.`).join('\n');
             await interaction.reply(`등록된 문장 목록:\n${list}`);
         }
     }
 
     if (interaction.commandName === '삭제') {
         const idx = interaction.options.getInteger('번호') - 1;
-        if (idx < 0 || idx >= sentences.length) {
+        if (!sentences[guildId] || idx < 0 || idx >= sentences[guildId].length) {
             await interaction.reply('올바른 번호를 입력해 주세요. (목록에서 확인 가능).');
         } else {
-            const removed = sentences.splice(idx, 1);
+            const removed = sentences[guildId].splice(idx, 1);
+            saveSentences();
             await interaction.reply(`문장이 삭제되었습니다: "${removed[0]}."`);
         }
     }
 });
 
-
-
-client.login(process.env.BOT_TOKEN || "여기에 토큰을 입력하세요");
+client.login(process.env.BOT_TOKEN);
