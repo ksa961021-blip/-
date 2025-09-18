@@ -2,6 +2,7 @@
 // =========================
 //   모듈 및 변수 선언
 // =========================
+
 const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
@@ -204,5 +205,3 @@ client.on('interactionCreate', async interaction => {
 //   봇 실행
 // =========================
 client.login(process.env.BOT_TOKEN);
-client.login(process.env.BOT_TOKEN);
-
